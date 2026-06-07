@@ -1,1 +1,5 @@
 /target
+embeddings.csv
+model_weights.safetensors
+thinking.log
+tokenizer.csv
