@@ -24,9 +24,9 @@ RustとHugging Faceの機械学習フレームワークである[Candle](https:/
 
 以下のコマンドを実行してプログラムを開始します。
 
-'''bash
+```bash
 cargo run
-'''
+```
 
 実行すると、モデルの重みとベクトルデータが保存され、続いて meaning関数、 raining関数、chat関数のデモンストレーションが順に行われます。また、各プロセスの実行ログが  hinking.log に追記されていきます。
 
