@@ -1,37 +1,95 @@
 ﻿# rust-llm
 
-RustとHugging Faceの機械学習フレームワークである[Candle](https://github.com/huggingface/candle)を使用した、GPTのようなTransformerデコーダーの実装です。
+`rust-llm` は、RustとCandleを利用して実装された、シンプルな文字単位（Character-level）のTransformer言語モデルライブラリです。
 
-## 概要
+## 外部クレートとしての利用方法
 
-このプロジェクトは、Rustを使ってゼロから大規模言語モデル（LLM）のアーキテクチャを構築する方法を学ぶためのサンプルです。因果的自己注意機構（Causal Self-Attention）、フィードフォワードネットワーク、およびテキスト生成ループを備えた基本的なTransformerデコーダーモデルを実装しています。
+他のRustプロジェクトからこのライブラリを利用するには、利用側プロジェクトの `Cargo.toml` の `[dependencies]` に追加します。
+ローカル環境にある場合はパスを指定してインポートできます。
 
-また、本プロジェクトではプロンプトの指示に従い、チャット機能、意味の学習、入出力の学習、思考のログ保存機能を備えています。
-
-## 機能
-
-- **Transformerデコーダー:**
-  - Causal Self-AttentionとMLPを用いた基本的なTransformer実装。
-  - candle-core と candle-nn を利用した効率的なテンソル演算。
-- **学習データの保存:** 実行時にモデルの重みを model_weights.safetensors として保存します。
-- **ベクトルデータの可視化:** 単語の埋め込み（Embedding）ベクトルを embeddings.csv として出力し、可視化に利用できるようにしています。
-- **chat関数:** テキストを入力するとTransformerで学習された言語モデルが出力する関数です。
-- **meaning関数:** 単語の意味を学習する機能を提供します。
-- **training関数:** 入力と出力のペアを学習する機能を提供します。
-- **thinkingログ機能:** 実行中の思考内容（処理内容）を  hinking.log に保存し、次回起動時に参照してログをコンソールに出力します。
-
-## 使い方
-
-以下のコマンドを実行してプログラムを開始します。
-
-```bash
-cargo run
+```toml
+[dependencies]
+rust-llm = { path = "../path/to/rust-llm" } # 実際の配置パスに合わせて変更してください
 ```
 
-実行すると、モデルの重みとベクトルデータが保存され、続いて meaning関数、 raining関数、chat関数のデモンストレーションが順に行われます。また、各プロセスの実行ログが  hinking.log に追記されていきます。
+GitHubなどのリモートリポジトリで管理している場合は、git URLを使って指定することも可能です。
 
-## プロジェクト構成
+```toml
+[dependencies]
+rust-llm = { git = "https://github.com/your-username/rust-llm.git" }
+```
 
-- src/model.rs: Transformerモデルのコア実装が含まれています。
-- src/main.rs: chat、meaning、 raining の各関数と、ログ機構、メインの実行ループが含まれています。
-- hinking.log: プログラムの思考・処理ログが保存されるファイルです。
+## 主要な関数
+
+本ライブラリは、モデルとの対話（推論）や小規模な学習（ファインチューニング）を行うために以下の主要な関数を提供しています。
+
+### `chat` 関数
+
+ユーザーからのテキスト入力を受け取り、AIとしてテキスト応答（推論結果）を生成して返します。
+
+```rust
+pub fn chat(
+    transformer: &Transformer,
+    device: &Device,
+    tokenizer: &mut CharTokenizer,
+    text: &str,
+) -> Result<String, Box<dyn std::error::Error>>
+```
+
+* **`transformer`**: 推論に使用するTransformerモデルのインスタンス。
+* **`device`**: テンソル演算を行うデバイス（CPUまたはGPU）。
+* **`tokenizer`**: 文字とトークンIDを相互変換するトークナイザー。
+* **`text`**: ユーザーからの入力文字列。
+
+### `meaning` 関数
+
+特定の単語（word）とその意味（meaning_text）のペアをモデルに学習させます。内部的には「{word}の意味は{meaning_text}です。」という文脈を作成し、重みの更新を行います。
+
+```rust
+pub fn meaning(
+    transformer: &Transformer,
+    varmap: &VarMap,
+    device: &Device,
+    tokenizer: &mut CharTokenizer,
+    word: &str,
+    meaning_text: &str,
+) -> Result<(), Box<dyn std::error::Error>>
+```
+
+* **`varmap`**: モデルの学習可能な変数を管理するマップ（Optimizerでの重み更新に使用）。
+* **`word`**: 学習させたい対象の単語。
+* **`meaning_text`**: 対象の単語の意味や説明のテキスト。
+
+### `training` 関数
+
+任意の入力（input）と出力（output）のペアをモデルに学習させます。基本的な仕組みは `meaning` 関数と同様ですが、より汎用的なテキストペアの学習に使用できます。
+
+```rust
+pub fn training(
+    transformer: &Transformer,
+    varmap: &VarMap,
+    device: &Device,
+    tokenizer: &mut CharTokenizer,
+    input: &str,
+    output: &str,
+) -> Result<(), Box<dyn std::error::Error>>
+```
+
+* **`input`**: 学習のトリガーとなる入力テキスト。
+* **`output`**: 入力に対してモデルに期待する出力のテキスト。
+
+## 実装例
+
+外部クレートから呼び出して使用する場合の簡単なイメージです。
+
+```rust
+use rust_llm::{chat, meaning, training, CharTokenizer};
+
+// ※ 実行前に Transformer, Device, VarMap などの初期化を行ってください。
+
+// 1. 言葉の意味を学習させる
+// meaning(&transformer, &varmap, &device, &mut tokenizer, "Rust", "安全で高速なシステムプログラミング言語")?;
+
+// 2. 学習結果を踏まえてチャットで推論する
+// let response = chat(&transformer, &device, &mut tokenizer, "Rust")?;
+```
